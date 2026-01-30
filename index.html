@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salesforce Giveaway Race</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        :root {
+            --sf-blue: #00A1E0;
+            --sf-dark-blue: #0176D3;
+            --cloud-white: #FFFFFF;
+            --text-color: #032D60;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 30%, #4facfe 0%, #00f2fe 100%);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-color);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            pointer-events: auto;
+            max-width: 500px;
+            width: 90%;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9);
+            display: none !important;
+            /* Ensure it's removed from flow */
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--sf-dark-blue);
+            font-size: 2rem;
+        }
+
+        h2 {
+            margin: 0.5rem 0;
+            color: var(--sf-dark-blue);
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin: 1rem 0;
+            padding: 0.5rem;
+            border: 2px solid #E5E5E5;
+            border-radius: 0.5rem;
+            font-family: inherit;
+            resize: vertical;
+            font-size: 1rem;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--sf-blue);
+        }
+
+        button {
+            background-color: var(--sf-dark-blue);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1.1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            font-weight: bold;
+            margin: 0.5rem;
+        }
+
+        button:hover {
+            background-color: var(--sf-blue);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background-color: transparent;
+            border: 2px solid var(--sf-dark-blue);
+            color: var(--sf-dark-blue);
+        }
+
+        button.secondary:hover {
+            background-color: rgba(1, 118, 211, 0.1);
+        }
+
+        #winner-name {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--sf-dark-blue);
+            margin: 1rem 0;
+            text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.5);
+        }
+
+        .agentforce-brand {
+            font-family: 'Inter', sans-serif;
+            /* Fallback, ideally a specific brand font */
+            letter-spacing: -1px;
+        }
+
+        /* Finish Line */
+        #finish-line {
+            position: absolute;
+            right: 50px;
+            top: 0;
+            bottom: 0;
+            width: 20px;
+            background-image:
+                linear-gradient(45deg, #ffffff 25%, transparent 25%),
+                linear-gradient(-45deg, #ffffff 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ffffff 75%),
+                linear-gradient(-45deg, transparent 75%, #ffffff 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            opacity: 0.5;
+            z-index: 2;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container">
+        <canvas id="race-canvas"></canvas>
+    </div>
+    <div id="finish-line"></div>
+
+    <div id="ui-layer">
+        <!-- Mute Button -->
+        <button id="mute-btn"
+            style="position: absolute; top: 20px; left: 20px; z-index: 100; padding: 0.5rem 1rem; font-size: 0.9rem; opacity: 0.8; pointer-events: auto;">
+            🔊 Sound On
+        </button>
+
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="modal">
+            <h1>☁️ Cloud Race Setup</h1>
+            <p>Paste names below (one per line)</p>
+            <textarea id="name-input" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana"></textarea>
+            <div id="participant-count" style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">0 Participants
+            </div>
+            <br>
+            <button id="start-btn">Start Race 🏁</button>
+        </div>
+
+        <!-- Winner Screen -->
+        <div id="winner-screen" class="modal hidden">
+            <h2>🎉 The Winner is... 🎉</h2>
+            <div id="winner-name" class="agentforce-brand">WINNER</div>
+            <div style="margin-top: 2rem;">
+                <button id="remove-btn">Remove & Race Again 🔄</button>
+                <button id="reset-btn" class="secondary">Reset All 🏠</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Music -->
+    <audio id="bgm" loop preload="auto">
+        <source src="Cloud%20Sprint%20Loop.mp3" type="audio/mpeg"
+            onerror="alert('Error: Audio file not found!\n\nPlease ensure the file is named exactly \'Cloud Sprint Loop.mp3\' and is in the same folder as index.html.');">
+    </audio>
+
+    <script>
+        // --- Configuration ---
+        const CONFIG = {
+            baseRadiusDefault: 45, // Increased from 30 for larger clouds
+            cloudSpeedMin: 0.75,
+            cloudSpeedMax: 2.25,
+            cloudBounciness: 0.8,
+            finishLineOffset: 50,
+            colors: ['#FFFFFF', '#F0F8FF', '#E6F3FF'] // Variations of white/light blue
+        };
+
+        // --- State ---
+        let names = [];
+        let clouds = [];
+        let animationId = null;
+        let isRacing = false;
+        let isCountingDown = false;
+        let countdownValue = 3;
+        let raceStartTime = 0;
+        let countdownInterval = null; // Global to allow clearing
+        let canvas, ctx;
+        let width, height;
+        let currentBaseRadius = CONFIG.baseRadiusDefault;
+
+        // --- DOM Elements ---
+        const setupScreen = document.getElementById('setup-screen');
+        const winnerScreen = document.getElementById('winner-screen');
+        const nameInput = document.getElementById('name-input');
+        const startBtn = document.getElementById('start-btn');
+        const winnerNameEl = document.getElementById('winner-name');
+        const participantCountEl = document.getElementById('participant-count');
+        const removeBtn = document.getElementById('remove-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const muteBtn = document.getElementById('mute-btn');
+        const bgm = document.getElementById('bgm');
+
+        // --- Sound Manager ---
+        const SoundManager = {
+            ctx: null,
+            isMuted: false,
+
+            init: function () {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // Ensure context is running (some browsers start suspended)
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+
+                // Set Volume to 8% (User requested adjustment)
+                if (bgm) {
+                    bgm.volume = 0.08;
+                }
+
+                // Try to play BGM if source exists
+                if (bgm && !this.isMuted) {
+                    const playPromise = bgm.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(_ => {
+                                // Autoplay started!
+                                console.log("Audio started playing successfully");
+                            })
+                            .catch(error => {
+                                alert("Audio Playback Failed: " + error.message + "\n\nTry interacting with the page first, or check if the file format is supported.");
+                                console.error("Audio playback error:", error);
+                            });
+                    }
+                }
+            },
+
+            playTone: function (freq, type, duration, startTime = 0) {
+                if (this.isMuted || !this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime + startTime);
+
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime + startTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + startTime + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(this.ctx.currentTime + startTime);
+                osc.stop(this.ctx.currentTime + startTime + duration);
+            },
+
+            playCountdown: function () {
+                this.playTone(600, 'sine', 0.1);
+            },
+
+            playGo: function () {
+                this.playTone(1000, 'sine', 0.4);
+                // Harmony
+                this.playTone(1500, 'triangle', 0.4);
+            },
+
+            playWin: function () {
+                // Major arpeggio fanfare
+                const now = 0;
+                this.playTone(523.25, 'sine', 0.2, now);       // C5
+                this.playTone(659.25, 'sine', 0.2, now + 0.1); // E5
+                this.playTone(783.99, 'sine', 0.2, now + 0.2); // G5
+                this.playTone(1046.50, 'sine', 0.6, now + 0.3); // C6
+            },
+
+            toggleMute: function () {
+                if (!this.ctx) this.init(); // Initialize if not already done
+
+                this.isMuted = !this.isMuted;
+                if (this.isMuted) {
+                    if (this.ctx) this.ctx.suspend();
+                    if (bgm) bgm.pause();
+                } else {
+                    if (this.ctx) this.ctx.resume();
+                    if (bgm) {
+                        bgm.play().catch(e => console.error(e));
+                    }
+                }
+                return this.isMuted;
+            }
+        };
+
+        // --- Initialization ---
+        function init() {
+            canvas = document.getElementById('race-canvas');
+            ctx = canvas.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+
+            startBtn.addEventListener('click', startRace);
+            removeBtn.addEventListener('click', removeAndRaceAgain);
+            resetBtn.addEventListener('click', resetToSetup);
+
+            muteBtn.addEventListener('click', () => {
+                const isMuted = SoundManager.toggleMute();
+                muteBtn.textContent = isMuted ? '🔇 Sound Off' : '🔊 Sound On';
+                muteBtn.style.opacity = isMuted ? '0.5' : '0.8';
+            });
+
+            nameInput.addEventListener('input', updateCount);
+        }
+
+        function updateCount() {
+            const text = nameInput.value;
+            const count = text.split('\n').map(n => n.trim()).filter(n => n.length > 0).length;
+            participantCountEl.textContent = `${count} Participants`;
+        }
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        // --- Cloud Class ---
+        class Cloud {
+            constructor(name, x, y, radius) {
+                this.name = name;
+                this.r = radius; // Removed random size variation to prevent overlap
+                this.x = x;
+                this.y = y;
+
+                // Random speed
+                this.vx = CONFIG.cloudSpeedMin + Math.random() * (CONFIG.cloudSpeedMax - CONFIG.cloudSpeedMin);
+                this.vy = (Math.random() - 0.5) * 2; // Slight vertical drift
+
+                // Visuals - generate a "fluffy" shape using multiple circles
+                this.puffs = [];
+                const puffCount = 5 + Math.floor(Math.random() * 3);
+                for (let i = 0; i < puffCount; i++) {
+                    this.puffs.push({
+                        dx: (Math.random() - 0.5) * this.r * 1.5,
+                        dy: (Math.random() - 0.5) * this.r * 0.8,
+                        r: this.r * (0.5 + Math.random() * 0.5)
+                    });
+                }
+            }
+
+            update() {
+                // If counting down, FREEZE completely
+                if (isCountingDown) return;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off top/bottom
+                if (this.y - this.r < 0) {
+                    this.y = this.r;
+                    this.vy *= -1;
+                }
+                if (this.y + this.r > height) {
+                    this.y = height - this.r;
+                    this.vy *= -1;
+                }
+
+                // Bounce off left/right
+                if (this.x - this.r < 0) {
+                    this.x = this.r;
+                    this.vx *= -1;
+                }
+                if (this.x + this.r > width) {
+                    this.x = width - this.r;
+                    this.vx *= -1;
+                }
+
+                // Cap Velocity to prevent explosions
+                // Keep it close to the max speed to prevent "going crazy"
+                const maxVel = 3;
+                if (this.vx > maxVel) this.vx = maxVel;
+                if (this.vx < -maxVel) this.vx = -maxVel;
+                if (this.vy > maxVel) this.vy = maxVel;
+                if (this.vy < -maxVel) this.vy = -maxVel;
+            }
+
+            draw(ctx) {
+                // Shadow for the whole cloud
+                ctx.shadowColor = 'rgba(0,0,0,0.15)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetY = 8;
+
+                // Draw puffs with gradient
+                this.puffs.forEach(puff => {
+                    const cx = this.x + puff.dx;
+                    const cy = this.y + puff.dy;
+
+                    // Radial Gradient for 3D effect
+                    const grad = ctx.createRadialGradient(cx - puff.r * 0.3, cy - puff.r * 0.3, puff.r * 0.1, cx, cy, puff.r);
+                    grad.addColorStop(0, 'white');
+                    grad.addColorStop(1, '#E6F3FF'); // Very light blue at edges
+
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, puff.r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Reset shadow for text
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetY = 0;
+
+                // Draw Name
+                ctx.fillStyle = '#032D60';
+                // Dynamic font size based on radius
+                const fontSize = Math.max(10, Math.floor(this.r * 0.5));
+                ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Text Stroke for readability
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.strokeText(this.name, this.x, this.y);
+                ctx.fillText(this.name, this.x, this.y);
+            }
+        }
+
+        // --- Physics Engine ---
+        function checkCollisions() {
+            // Always run physics, even during countdown, to allow settling
+            const timeSinceStart = Date.now() - raceStartTime;
+
+            // NEW: Disable collisions completely during countdown
+            if (isCountingDown) return;
+
+            // Grace period: No collisions for first 0.5 seconds to prevent initial explosion
+            // (Reduced from 2000ms because we want them to settle during countdown)
+            if (timeSinceStart < 500) return;
+
+            // Soft Warmup: For first few seconds, use very low restitution
+            let currentRestitution = 0.5;
+            if (timeSinceStart < 4000) { // Extended warmup to cover countdown + start
+                currentRestitution = 0.1;
+            }
+
+            for (let i = 0; i < clouds.length; i++) {
+                for (let j = i + 1; j < clouds.length; j++) {
+                    let c1 = clouds[i];
+                    let c2 = clouds[j];
+
+                    let dx = c2.x - c1.x;
+                    let dy = c2.y - c1.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance === 0) distance = 0.01; // Prevent divide by zero
+
+                    let minDist = c1.r + c2.r;
+
+                    if (distance < minDist) {
+                        // Collision detected
+
+                        // Normal vector
+                        let nx = dx / distance;
+                        let ny = dy / distance;
+
+                        // Relative velocity
+                        let dvx = c2.vx - c1.vx;
+                        let dvy = c2.vy - c1.vy;
+
+                        // Velocity along normal
+                        let velAlongNormal = dvx * nx + dvy * ny;
+
+                        // Do not resolve if velocities are separating
+                        if (velAlongNormal > 0) continue;
+
+                        // Restitution (bounciness)
+                        let jVal = -(1 + currentRestitution) * velAlongNormal;
+                        jVal /= (1 / c1.r + 1 / c2.r);
+
+                        let m1 = c1.r;
+                        let m2 = c2.r;
+                        jVal /= (1 / m1 + 1 / m2);
+
+                        // Impulse
+                        let impulseX = jVal * nx;
+                        let impulseY = jVal * ny;
+
+                        c1.vx -= (1 / m1) * impulseX;
+                        c1.vy -= (1 / m1) * impulseY;
+                        c2.vx += (1 / m2) * impulseX;
+                        c2.vy += (1 / m2) * impulseY;
+
+                        // Positional correction to prevent sticking
+                        // Reduce correction strength during warmup to prevent "squeezing" ejection
+                        let percent = 0.2;
+                        if (timeSinceStart < 4000) {
+                            percent = 0.05; // Very gentle correction during warmup
+                        }
+
+                        let slop = 0.01; // Threshold
+                        let penetration = minDist - distance;
+                        if (penetration > slop) {
+                            let correctionX = (penetration / (1 / m1 + 1 / m2)) * percent * nx;
+                            let correctionY = (penetration / (1 / m1 + 1 / m2)) * percent * ny;
+
+                            // Hard cap on correction amount to prevent teleportation
+                            const maxCorrection = 2;
+                            if (correctionX > maxCorrection) correctionX = maxCorrection;
+                            if (correctionX < -maxCorrection) correctionX = -maxCorrection;
+                            if (correctionY > maxCorrection) correctionY = maxCorrection;
+                            if (correctionY < -maxCorrection) correctionY = -maxCorrection;
+
+                            c1.x -= (1 / m1) * correctionX;
+                            c1.y -= (1 / m1) * correctionY;
+                            c2.x += (1 / m2) * correctionX;
+                            c2.y += (1 / m2) * correctionY;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Game Loop ---
+        function loop() {
+            if (!isRacing) return;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Update and Draw
+            clouds.forEach(cloud => {
+                cloud.update();
+                cloud.draw(ctx);
+            });
+
+            checkCollisions();
+
+            // Draw Countdown
+            if (isCountingDown) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, width, height);
+
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 150px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 20;
+
+                let text = countdownValue > 0 ? countdownValue : "GO!";
+                ctx.fillText(text, width / 2, height / 2);
+
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
+
+                animationId = requestAnimationFrame(loop);
+                return; // Skip winner check during countdown
+            }
+
+            // Check Winner
+            let winner = null;
+            const finishX = width - CONFIG.finishLineOffset;
+
+            for (let cloud of clouds) {
+                if (cloud.x + cloud.r >= finishX) {
+                    console.log(`Winner found: ${cloud.name} at ${cloud.x} (Finish: ${finishX})`);
+                    winner = cloud;
+                    break;
+                }
+            }
+
+            if (winner) {
+                declareWinner(winner);
+            } else {
+                animationId = requestAnimationFrame(loop);
+            }
+        }
+
+        // --- Actions ---
+        function startRace() {
+            const rawText = nameInput.value.trim();
+            if (!rawText) {
+                alert("Please enter at least one name!");
+                return;
+            }
+
+            names = rawText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+
+            if (names.length === 0) return;
+
+            setupRace(names);
+        }
+
+        function setupRace(raceNames) {
+            // Initialize Audio on first interaction
+            SoundManager.init();
+
+            // Stop any existing loop
+            isRacing = false;
+            if (animationId) cancelAnimationFrame(animationId);
+
+            clouds = [];
+
+            // Vertical Line Spawn Logic
+            // Calculate available height per participant
+            const availableHeight = height - 40; // 20px padding top/bottom
+            const heightPerCloud = availableHeight / raceNames.length;
+
+            // Determine radius based on height, but cap it
+            // We want them to touch or have slight gap
+            // r = (heightPerCloud / 2) * 0.75 (padding)
+            let targetRadius = (heightPerCloud / 2) * 0.75;
+            targetRadius = Math.min(targetRadius, 60); // Max size
+            targetRadius = Math.max(targetRadius, 10); // Min size
+
+            currentBaseRadius = targetRadius;
+
+            raceNames.forEach((name, index) => {
+                // X Position: Left edge + radius + padding
+                let x = 20 + currentBaseRadius;
+
+                // Y Position: Distribute evenly
+                // Center of the slot
+                let y = 20 + (index * heightPerCloud) + (heightPerCloud / 2);
+
+                const cloud = new Cloud(name, x, y, currentBaseRadius);
+                clouds.push(cloud);
+            });
+
+            setupScreen.classList.add('hidden');
+            winnerScreen.classList.add('hidden');
+
+            // Force resize to ensure width is correct
+            resize();
+
+            isRacing = true;
+            isCountingDown = true;
+            countdownValue = 3;
+            raceStartTime = Date.now();
+
+            console.log(`Starting race. Width: ${width}, FinishX: ${width - CONFIG.finishLineOffset}`);
+            console.log(`Clouds spawned:`, clouds.map(c => ({ name: c.name, x: c.x })));
+
+            // Clear any existing interval
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            // Start Countdown Timer
+            SoundManager.playCountdown(); // 3
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                console.log(`Countdown: ${countdownValue}`);
+
+                if (countdownValue > 0) {
+                    SoundManager.playCountdown();
+                } else if (countdownValue === 0) {
+                    SoundManager.playGo();
+                }
+
+                if (countdownValue < 0) {
+                    clearInterval(countdownInterval);
+                    isCountingDown = false;
+                    console.log("GO!");
+                }
+            }, 1000);
+
+            loop();
+        }
+
+        function declareWinner(cloud) {
+            isRacing = false;
+            cancelAnimationFrame(animationId);
+
+            winnerNameEl.textContent = cloud.name;
+            winnerScreen.classList.remove('hidden');
+
+            SoundManager.playWin();
+            fireConfetti();
+
+            // Fade out music over 6 seconds
+            if (bgm && !bgm.paused) {
+                const fadeDuration = 6000;
+                const fadeInterval = 100; // Step every 100ms
+                const startVolume = bgm.volume;
+                const step = startVolume / (fadeDuration / fadeInterval);
+
+                const fadeId = setInterval(() => {
+                    if (bgm.volume > step) {
+                        bgm.volume -= step;
+                    } else {
+                        bgm.volume = 0;
+                        bgm.pause();
+                        bgm.currentTime = 0;
+                        bgm.volume = 0.08; // Reset for next race
+                        clearInterval(fadeId);
+                    }
+                }, fadeInterval);
+            }
+        }
+
+        function removeAndRaceAgain() {
+            const winnerName = winnerNameEl.textContent;
+            // Remove winner from the list
+            const index = names.indexOf(winnerName);
+            if (index > -1) {
+                names.splice(index, 1);
+            }
+
+            // Update the textarea so the user sees the change
+            nameInput.value = names.join('\n');
+            updateCount();
+
+            if (names.length === 0) {
+                alert("Race over! No more participants.");
+                resetToSetup();
+                return;
+            }
+
+            setupRace(names);
+        }
+
+        function resetToSetup() {
+            isRacing = false;
+            if (animationId) cancelAnimationFrame(animationId);
+            ctx.clearRect(0, 0, width, height);
+            winnerScreen.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+        }
+
+        // --- Confetti (Simple Custom Implementation) ---
+        function fireConfetti() {
+            const colors = ['#00A1E0', '#0176D3', '#FFFFFF', '#FFD700'];
+            const confettiCount = 150;
+            const confettis = [];
+
+            for (let i = 0; i < confettiCount; i++) {
+                confettis.push({
+                    x: width / 2,
+                    y: height / 2,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20 - 5, // Upward bias
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 10 + 5,
+                    rotation: Math.random() * 360,
+                    rotationSpeed: (Math.random() - 0.5) * 10
+                });
+            }
+
+            let confettiFrame = 0;
+            function confettiLoop() {
+                if (isRacing) return; // Stop if race restarted (though modal blocks it)
+                if (confettiFrame > 200) return; // Stop after a few seconds
+
+                // We can draw on the same canvas since race is stopped
+                // But we need to redraw the clouds in their frozen state or just clear?
+                // Let's clear and redraw clouds static + confetti
+                ctx.clearRect(0, 0, width, height);
+
+                // Draw frozen clouds
+                clouds.forEach(cloud => cloud.draw(ctx));
+
+                // Update and draw confetti
+                confettis.forEach(c => {
+                    c.x += c.vx;
+                    c.y += c.vy;
+                    c.vy += 0.5; // Gravity
+                    c.rotation += c.rotationSpeed;
+
+                    ctx.save();
+                    ctx.translate(c.x, c.y);
+                    ctx.rotate(c.rotation * Math.PI / 180);
+                    ctx.fillStyle = c.color;
+                    ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size);
+                    ctx.restore();
+                });
+
+                confettiFrame++;
+                requestAnimationFrame(confettiLoop);
+            }
+            confettiLoop();
+        }
+
+        // Run
+        init();
+
+    </script>
+</body>
+
+</html>
